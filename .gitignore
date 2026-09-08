@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+results/llm_cache/
+results/llm_log.jsonl
+results/llm_transcript.jsonl
+results/*.log
