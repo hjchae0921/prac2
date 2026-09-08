@@ -11,6 +11,7 @@ from typing import Dict, List, Optional
 import numpy as np
 
 DEFAULT_MODEL = os.environ.get("LLMBO_MODEL", "claude-opus-5")
+DEFAULT_OPENAI_MODEL = os.environ.get("LLMBO_OPENAI_MODEL", "gpt-5.4-mini")
 
 SYSTEM_PROMPT = """You are an expert in Gaussian-process modelling and Bayesian optimisation.
 Your job: given a description of the design variables, the objective, qualitative domain
@@ -133,3 +134,57 @@ class ClaudeProposer:
             with open(self.log_path, "a") as f:
                 f.write(json.dumps(rec, ensure_ascii=False) + "\n")
         return text
+
+
+class OpenAIProposer:
+    """Same interface as ClaudeProposer but calls the OpenAI Chat Completions API
+    (official `openai` SDK).  Requires OPENAI_API_KEY.  Responses are cached on disk
+    exactly like the Claude backend, keyed by (model, system prompt, user prompt)."""
+
+    def __init__(self, model: str = DEFAULT_OPENAI_MODEL, cache_dir: str = "results/llm_cache",
+                 log_path: Optional[str] = "results/llm_log.jsonl", max_tokens: int = 4000,
+                 reasoning_effort: Optional[str] = None):
+        import openai  # lazy import
+        self.client = openai.OpenAI()
+        self.model = model
+        self.max_tokens = max_tokens
+        self.reasoning_effort = reasoning_effort
+        self.cache_dir = Path(cache_dir)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.log_path = Path(log_path) if log_path else None
+        self.n_calls = 0
+        self.n_cache_hits = 0
+
+    def _cache_key(self, prompt: str) -> Path:
+        h = hashlib.sha256((self.model + "\n" + SYSTEM_PROMPT + "\n" + prompt).encode()).hexdigest()[:24]
+        return self.cache_dir / f"{h}.json"
+
+    def __call__(self, prompt: str) -> str:
+        path = self._cache_key(prompt)
+        if path.exists():
+            self.n_cache_hits += 1
+            return json.loads(path.read_text())["text"]
+        kwargs = dict(model=self.model,
+                      messages=[{"role": "system", "content": SYSTEM_PROMPT},
+                                {"role": "user", "content": prompt}],
+                      max_completion_tokens=self.max_tokens)
+        if self.reasoning_effort:
+            kwargs["reasoning_effort"] = self.reasoning_effort
+        resp = self.client.chat.completions.create(**kwargs)
+        self.n_calls += 1
+        text = resp.choices[0].message.content or ""
+        usage = resp.usage.model_dump() if resp.usage is not None else None
+        rec = {"model": self.model, "prompt": prompt, "text": text, "usage": usage}
+        path.write_text(json.dumps(rec, ensure_ascii=False, indent=1))
+        if self.log_path:
+            with open(self.log_path, "a") as f:
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        return text
+
+
+def make_proposer(backend: str = "claude", model: Optional[str] = None, **kw):
+    if backend == "claude":
+        return ClaudeProposer(model=model or DEFAULT_MODEL, **kw)
+    if backend == "openai":
+        return OpenAIProposer(model=model or DEFAULT_OPENAI_MODEL, **kw)
+    raise ValueError(f"unknown LLM backend {backend!r} (use 'claude' or 'openai')")

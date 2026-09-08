@@ -4,6 +4,7 @@
 Examples
   python run_experiment.py                                   # offline (mock LLM), all problems
   python run_experiment.py --strategies fixed_rbf llm --problems sinlin2d --seeds 3   # real Claude
+  python run_experiment.py --strategies fixed_rbf greedy llm --backend openai --model gpt-5.4-mini
   python run_experiment.py --dry-run-prompt sinlin2d         # print the prompt the LLM would get
 """
 from __future__ import annotations
@@ -32,7 +33,8 @@ def run(args):
         print(f"\n=== {pname} (d={problem.dim}, f*={problem.f_min:.4f}) ===")
         for sname in args.strategies:
             for seed in range(args.seeds):
-                strat = make_strategy(sname, refresh=args.refresh, model=args.model, verbose=args.verbose)
+                strat = make_strategy(sname, refresh=args.refresh, model=args.model, backend=args.backend,
+                                      verbose=args.verbose)
                 bo = BayesOpt(problem, strat, n_init=args.n_init, n_iter=args.iters, seed=seed,
                               n_restarts=args.restarts, verbose=args.verbose)
                 r = bo.run()
@@ -119,7 +121,10 @@ def main():
     ap.add_argument("--n-init", type=int, default=5)
     ap.add_argument("--refresh", type=int, default=10, help="re-propose kernels every k iterations")
     ap.add_argument("--restarts", type=int, default=2)
-    ap.add_argument("--model", default=None, help="Claude model id for --strategies llm")
+    ap.add_argument("--backend", default="claude", choices=["claude", "openai"],
+                    help="LLM provider for --strategies llm")
+    ap.add_argument("--model", default=None,
+                    help="model id for --strategies llm (default: claude-opus-5 / gpt-5.4-mini)")
     ap.add_argument("--out", default="results")
     ap.add_argument("--tag", default=None)
     ap.add_argument("--plot-only", default=None, help="path to a results json; only summarise + plot")
@@ -140,9 +145,11 @@ def main():
     if args.plot_only:
         path = Path(args.plot_only)
     else:
-        if "llm" in args.strategies and not os.environ.get("ANTHROPIC_API_KEY"):
-            print("warning: 'llm' strategy requested but ANTHROPIC_API_KEY is not set; "
-                  "the SDK will try other credential sources.", file=sys.stderr)
+        if "llm" in args.strategies:
+            key = "OPENAI_API_KEY" if args.backend == "openai" else "ANTHROPIC_API_KEY"
+            if not os.environ.get(key):
+                print(f"warning: 'llm' strategy requested but {key} is not set; "
+                      "the SDK will try other credential sources.", file=sys.stderr)
         args.tag = args.tag or time.strftime("%Y%m%d_%H%M%S")
         path = run(args)
     plot(path, path.with_suffix(".png"))

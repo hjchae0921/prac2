@@ -3,3 +3,4 @@ scipy>=1.10
 matplotlib>=3.7
 anthropic>=0.40
 pytest>=7
+openai>=1.50

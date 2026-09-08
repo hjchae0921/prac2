@@ -154,9 +154,9 @@ class LLMKernelStrategy(KernelStrategy):
     description, the data, and the BIC of previously tried kernels, and proposes new ones."""
 
     def __init__(self, proposer=None, refresh: int = 10, model: Optional[str] = None,
-                 verbose: bool = False):
-        from .llm_client import ClaudeProposer, DEFAULT_MODEL
-        self.proposer = proposer or ClaudeProposer(model=model or DEFAULT_MODEL)
+                 backend: str = "claude", verbose: bool = False):
+        from .llm_client import make_proposer
+        self.proposer = proposer or make_proposer(backend, model)
         self.refresh = refresh
         self.verbose = verbose
         self.name = "llm"
@@ -201,5 +201,5 @@ def make_strategy(name: str, **kw) -> KernelStrategy:
         return MockLLMStrategy(refresh=kw.get("refresh", 10))
     if name == "llm":
         return LLMKernelStrategy(refresh=kw.get("refresh", 10), model=kw.get("model"),
-                                 verbose=kw.get("verbose", False))
+                                 backend=kw.get("backend", "claude"), verbose=kw.get("verbose", False))
     raise ValueError(f"unknown strategy {name!r}")

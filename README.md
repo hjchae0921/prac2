@@ -29,7 +29,7 @@ results/           실험 결과 json + png
 | `fixed_mat52` | 고정 Matern-5/2 ARD 커널 (BoTorch 기본값에 해당) |
 | `greedy` | 언어 지식 없이 `+`, `*`로 커널을 확장하며 BIC로 고르는 알고리즘적 탐색 (Automatic Statistician 방식) |
 | `mock_llm` | **오프라인 대체용**. 문제의 구조 태그(주기성, 가법성 등)를 규칙으로 커널에 대응. "정확한 도메인 지식을 커널에 넣으면 도움이 되는가"만 분리해서 보는 상한선이며, LLM 성능 측정이 **아님** |
-| `llm` | 실제 Claude 호출. 문제 설명 + 관측 데이터 + 이전에 시도한 커널의 BIC를 보고 커널 3~5개 제안, 10회 평가마다 재제안 |
+| `llm` | 실제 LLM 호출 (`--backend claude` 또는 `openai`). 문제 설명 + 관측 데이터 + 이전에 시도한 커널의 BIC를 보고 커널 3~5개 제안, 10회 평가마다 재제안 |
 
 모든 전략은 같은 루프를 씁니다. 제안된 후보 커널들을 현재 데이터에 각각 적합한 뒤 **BIC가 가장 낮은 커널**을 채택하고, EI로 다음 점을 고릅니다.
 
@@ -62,6 +62,11 @@ python run_experiment.py --strategies fixed_rbf greedy llm --problems sinlin2d g
     --seeds 3 --iters 40 --tag llm_pilot
 # LLM 응답은 results/llm_cache/ 에 캐시되어 재실행 시 비용이 들지 않습니다.
 # 프롬프트/응답 전문은 results/llm_transcript.jsonl 에 남습니다.
+
+# 3b) OpenAI 백엔드 (OPENAI_API_KEY 필요). 모델 id는 계정에서 실제 제공되는 이름으로 지정
+export OPENAI_API_KEY=...
+python run_experiment.py --strategies fixed_rbf greedy llm --backend openai --model gpt-5.4-mini \
+    --seeds 3 --iters 40 --tag openai_pilot
 
 # 결과 json으로 표/그래프만 다시 만들기
 python run_experiment.py --plot-only results/results_offline_pilot.json
